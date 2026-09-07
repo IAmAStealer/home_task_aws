@@ -20,6 +20,7 @@ resource "aws_iam_role" "iam_role_lambda_requests" {
 
   tags = {
     environment = var.environment
+    application = "lambda-requests"
   }
 }
 

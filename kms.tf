@@ -1,10 +1,7 @@
 resource "aws_kms_key" "dynamodb_key" {
-  description             = "${var.environment}-requests-db-key"
+  description             = "${var.environment}-lambda-requests-db-key"
   enable_key_rotation     = true
   deletion_window_in_days = 20
-  tags = {
-    environment = var.environment
-  }
   policy = jsonencode({
     Version = "2012-10-17"
     Id      = "key-dynamodb-1"
@@ -60,6 +57,10 @@ resource "aws_kms_key" "dynamodb_key" {
       # }
     ]
   })
+  tags = {
+    environment = var.environment
+    application = "lambda-requests"
+  }
 }
 
 resource "aws_kms_alias" "dynamodb_key" {
