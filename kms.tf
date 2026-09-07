@@ -1,7 +1,10 @@
 resource "aws_kms_key" "dynamodb_key" {
-  description             = "staging-requests-db-key"
+  description             = "${var.environment}-requests-db-key"
   enable_key_rotation     = true
   deletion_window_in_days = 20
+  tags = {
+    environment = var.environment
+  }
   policy = jsonencode({
     Version       = "2012-10-17"
     Id            = "key-dynamodb-1"
@@ -60,6 +63,6 @@ resource "aws_kms_key" "dynamodb_key" {
 }
 
 resource "aws_kms_alias" "dynamodb_key" {
-  name          = "alias/staging-requests-db-key"
+  name          = "alias/${var.environment}-requests-db-key"
   target_key_id = aws_kms_key.dynamodb_key.key_id
 }
