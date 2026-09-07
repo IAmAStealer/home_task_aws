@@ -39,15 +39,14 @@ resource "aws_iam_role_policy" "iam_role_policy_lambda_requests" {
         Effect   = "Allow"
         Resource = aws_dynamodb_table.dynamodb.arn
       },
-      # {
-      #   Action = [
-      #     "logs:CreateLogGroup",
-      #     "logs:CreateLogStream",
-      #     "logs:PutLogEvents"
-      #   ]
-      #   Effect   = "Allow"
-      #   Resource = cloudwatch.arn
-      # },
+      {
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Effect   = "Allow"
+        Resource = aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn
+      },
       {
         Action = [
           "kms:GenerateDataKey",
