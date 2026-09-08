@@ -1,6 +1,10 @@
 # Local .terraform directories
 .terraform/
 
+# Python bytecode cache / Lambda build artifact
+__pycache__/
+lambda/function.zip
+
 # .tfstate files
 *.tfstate
 *.tfstate.*
@@ -44,3 +48,5 @@ terraform.rc
 
 # for personal organisation
 TODO.md
+staging.plan
+prod.plan

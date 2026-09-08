@@ -8,7 +8,6 @@ resource "aws_apigatewayv2_integration" "api_gateway_integration_lambda" {
   integration_type = "AWS_PROXY"
 
   connection_type           = "INTERNET"
-  content_handling_strategy = "CONVERT_TO_TEXT"
   description               = "Lambda requests"
   integration_method        = "POST"
   integration_uri           = aws_lambda_function.lambda_requests.invoke_arn
