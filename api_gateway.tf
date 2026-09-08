@@ -1,17 +1,23 @@
 resource "aws_apigatewayv2_api" "api_gateway_lambda" {
   name          = "${var.environment}-lambda-api-gateway"
   protocol_type = "HTTP"
+
+  tags = {
+    environment = var.environment,
+    application = "lambda-requests"
+  }
 }
 
 resource "aws_apigatewayv2_integration" "api_gateway_integration_lambda" {
-  api_id           = aws_apigatewayv2_api.api_gateway_lambda.id
-  integration_type = "AWS_PROXY"
+  api_id                 = aws_apigatewayv2_api.api_gateway_lambda.id
+  payload_format_version = "2.0"
+  integration_type       = "AWS_PROXY"
 
-  connection_type           = "INTERNET"
-  description               = "Lambda requests"
-  integration_method        = "POST"
-  integration_uri           = aws_lambda_function.lambda_requests.invoke_arn
-  passthrough_behavior      = "WHEN_NO_MATCH"
+  connection_type      = "INTERNET"
+  description          = "Lambda requests"
+  integration_method   = "POST"
+  integration_uri      = aws_lambda_function.lambda_requests.invoke_arn
+  passthrough_behavior = "WHEN_NO_MATCH"
 }
 
 resource "aws_apigatewayv2_stage" "api_gateway_lambda_stage" {
@@ -22,6 +28,10 @@ resource "aws_apigatewayv2_stage" "api_gateway_lambda_stage" {
   default_route_settings {
     throttling_burst_limit = 5
     throttling_rate_limit  = 5
+  }
+  tags = {
+    environment = var.environment,
+    application = "lambda-requests"
   }
 }
 

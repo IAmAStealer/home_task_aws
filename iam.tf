@@ -45,7 +45,7 @@ resource "aws_iam_role_policy" "iam_role_policy_lambda_requests" {
           "logs:PutLogEvents"
         ]
         Effect   = "Allow"
-        Resource = aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn
+        Resource = "${aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn}:*"
       },
       {
         Action = [
