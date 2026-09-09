@@ -155,6 +155,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
         Action = [
           "lambda:CreateFunction",
           "lambda:GetFunction",
+          "lambda:ListVersionsByFunction",
           "lambda:DeleteFunction",
           "lambda:UpdateFunctionConfiguration",
           "lambda:GetPolicy",
