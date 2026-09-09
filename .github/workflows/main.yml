@@ -14,6 +14,10 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.2"
       - name: Initialize terraform
         run: terraform init -backend=false # avoid connecting, only load terraform for checks
       - name: Validate terraform
@@ -33,6 +37,10 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.2"
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
@@ -55,6 +63,10 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.2"
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
