@@ -119,7 +119,8 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "kms:ScheduleKeyDeletion",
           "kms:CancelKeyDeletion",
           "kms:TagResource",
-          "kms:UntagResource"
+          "kms:UntagResource",
+          "kms:GetKeyRotationStatus"
         ]
         Effect   = "Allow"
         Resource = aws_kms_key.dynamodb_key.arn
@@ -157,7 +158,6 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
       },
       {
         Action = [
-          "logs:DescribeLogGroups",
           "logs:CreateLogGroup",
           "logs:DeleteLogGroup",
           "logs:PutRetentionPolicy",
@@ -166,6 +166,13 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
         ]
         Effect   = "Allow"
         Resource = "${aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn}:*"
+      },
+      {
+        Action = [
+          "logs:DescribeLogGroups",
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:*"
       },
       {
         Action = [
@@ -191,6 +198,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
         Action = [
           "iam:GetRole",
           "iam:GetRolePolicy",
+          "iam:ListRolePolicies",
           "iam:CreateRole",
           "iam:DeleteRole",
           "iam:PassRole",
