@@ -120,7 +120,8 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "kms:CancelKeyDeletion",
           "kms:TagResource",
           "kms:UntagResource",
-          "kms:GetKeyRotationStatus"
+          "kms:GetKeyRotationStatus",
+          "kms:ListResourceTags"
         ]
         Effect   = "Allow"
         Resource = aws_kms_key.dynamodb_key.arn
@@ -163,9 +164,10 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "logs:PutRetentionPolicy",
           "logs:TagLogGroup",
           "logs:UntagLogGroup",
+          "logs:ListTagsForResource",
         ]
         Effect   = "Allow"
-        Resource = "${aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn}:*"
+        Resource = aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn
       },
       {
         Action = [
@@ -199,6 +201,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "iam:GetRole",
           "iam:GetRolePolicy",
           "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
           "iam:CreateRole",
           "iam:DeleteRole",
           "iam:PassRole",
