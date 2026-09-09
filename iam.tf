@@ -96,6 +96,8 @@ resource "aws_iam_role" "iam_role_github_action" {
   }
 }
 
+# kms:ListAliases logically targets a wildcard because it is about listing every alias in the account, not one in particular
+#tfsec:ignore:aws-iam-no-policy-wildcards
 resource "aws_iam_role_policy" "iam_role_policy_github_action" {
   name = "${var.environment}-iam-role-policy-lambda-requests"
   role = aws_iam_role.iam_role_github_action.id
@@ -128,6 +130,13 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
       },
       {
         Action = [
+          "kms:ListAliases",
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        Action = [
           "dynamodb:DescribeTable",
           "dynamodb:ListTagsOfResource",
           "dynamodb:CreateTable",
@@ -137,6 +146,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "dynamodb:UntagResource",
           "dynamodb:UpdateContinuousBackups",
           "dynamodb:DescribeContinuousBackups",
+          "dynamodb:DescribeTimeToLive",
         ]
         Effect   = "Allow"
         Resource = aws_dynamodb_table.dynamodb.arn
