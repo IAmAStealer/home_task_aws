@@ -20,6 +20,7 @@ resource "aws_apigatewayv2_integration" "api_gateway_integration_lambda" {
   passthrough_behavior = "WHEN_NO_MATCH"
 }
 
+#tfsec:ignore:aws-api-gateway-enable-access-logging -- deferred, not required by the assignment; tracked as a known gap in README/TODO.md rather than fixed here
 resource "aws_apigatewayv2_stage" "api_gateway_lambda_stage" {
   api_id      = aws_apigatewayv2_api.api_gateway_lambda.id
   name        = "$default"

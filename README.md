@@ -109,5 +109,12 @@ The OIDC trust (GitHub → AWS, no stored long-lived keys) and the deploy role's
 
 ## Known limitations
 
-- The GitHub Actions workflow itself isn't wired up yet — the OIDC trust/deploy role are ready, but deploys are still manual for now.
-- No `requirements.txt` / dependency scanning set up yet — the Lambda currently has no third-party dependencies beyond `boto3` (provided by the runtime).
+### Known tfsec findings (deliberately not fixed)
+
+The `security-checks` CI job runs tfsec, and it flags a few things that are known, considered, and deliberately deferred rather than silently ignored:
+
+- **`logs:CreateLogStream`/`PutLogEvents` on a wildcarded resource** (`iam.tf`) — CloudWatch Logs stream names are generated dynamically by AWS and can't be enumerated in advance, so a trailing `:*` on the log group ARN is the standard way to scope this permission. For reference, AWS's own `AWSLambdaBasicExecutionRole` managed policy uses a full `Resource: "*"` for these same actions across every log group in the account — this project's version, scoped to one specific log group, is already stricter than that default. Not yet suppressed with a `#tfsec:ignore` (missing the exact rule ID at the time of writing) but the reasoning stands.
+- **`aws-api-gateway-enable-access-logging`** (`api_gateway.tf`) — API Gateway access logs (who called what, when) aren't set up. Not required by the assignment; would need its own log group + IAM wiring.
+- **`aws-cloudwatch-log-group-customer-key`** (`cloudwatch.tf`) — the Lambda's log group isn't encrypted with the project's KMS CMK (see "Not implemented" list above for why — needs a `logs.amazonaws.com` statement added to the key policy first).
+- **`aws-lambda-enable-tracing`** (`lambda.tf`) — AWS X-Ray tracing isn't enabled. Not required by the assignment; would add its own IAM permissions and a small runtime overhead.
+- **DynamoDB Point-in-time recovery** — the one finding actually worth fixing rather than deferring (cheap, one block); being added next in `dynamodb.tf` along with the corresponding `dynamodb:UpdateContinuousBackups`/`DescribeContinuousBackups` permissions on the deploy role.

@@ -7,6 +7,10 @@ resource "aws_dynamodb_table" "dynamodb" {
     kms_key_arn = aws_kms_key.dynamodb_key.arn
   }
 
+  point_in_time_recovery {
+    enabled = true
+  }
+
   attribute {
     name = "uuid"
     type = "S"
