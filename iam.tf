@@ -82,7 +82,7 @@ resource "aws_iam_role" "iam_role_github_action" {
         "Condition" : {
           "StringEquals" : {
             "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com",
-            "token.actions.githubusercontent.com:sub" : "repo:IAmAStealer/home_task_aws:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" : "repo:IAmAStealer@24506305/home_task_aws@1360249375:ref:refs/heads/main"
           }
         }
       }
