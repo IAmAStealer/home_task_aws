@@ -75,7 +75,10 @@ resource "aws_iam_role" "iam_role_github_action" {
         "Principal" : {
           "Federated" : "${aws_iam_openid_connect_provider.aws_iam_oidc_github_action.arn}"
         },
-        "Action" : "sts:AssumeRoleWithWebIdentity",
+        "Action" : [
+          "sts:AssumeRoleWithWebIdentity",
+          "sts:TagSession"
+        ],
         "Condition" : {
           "StringEquals" : {
             "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com",
