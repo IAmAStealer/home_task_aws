@@ -220,6 +220,21 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
         Effect   = "Allow"
         Resource = aws_iam_openid_connect_provider.aws_iam_oidc_github_action.arn
       },
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::3a43faa4-955a-4c3d-9579-af96f65a9932/env:/${var.environment}/terraform.tfstate"
+      },
+      {
+        Action = [
+          "s3:ListBucket",
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::3a43faa4-955a-4c3d-9579-af96f65a9932"
+      },
     ]
   })
 }
