@@ -37,7 +37,7 @@ No secrets are stored in this repository. Local deployment uses your own AWS CLI
 
 ## Deploying staging
 
-Staging and prod are isolated via separate Terraform workspaces (they share the same local backend file otherwise, and would overwrite each other without this).
+Staging and prod are isolated via separate Terraform workspaces, backed by a shared S3 backend (see Bootstrap below) — without that, they'd share the same local state file and overwrite each other.
 
 ```bash
 terraform init
@@ -50,7 +50,26 @@ Deploying `prod` is identical, on its own workspace: `terraform workspace new pr
 
 ### Bootstrap (one-time, per AWS account)
 
-This repo provisions its own CI/CD IAM role (OIDC-federated, assumed by GitHub Actions — see `oidc.tf`). That role can't create itself: GitHub can't assume a role that doesn't exist yet. So the **very first** `apply` on a fresh AWS account (the one that creates the OIDC provider, the deploy role, and everything else) has to be run locally, with your own AWS credentials — not through CI. Once that first apply succeeds, all subsequent deploys (staging or prod) can go through GitHub Actions using that role. If you ever destroy and recreate the deploy role itself, you're back to a local bootstrap for that one step.
+Two things need to exist before this project can be deployed at all, neither of which Terraform can create for itself (chicken-and-egg):
+
+**1. The S3 state backend.** Terraform's state has to live somewhere persistent and shared between your machine and CI — a local state file can't do that (and must never be committed to git: it contains account IDs, ARNs and other details you don't want in a public repo). Create the bucket once, manually:
+
+```bash
+BUCKET="<a-globally-unique-name>"   # this project used a UUID
+
+aws s3api create-bucket --bucket "$BUCKET" --region eu-west-1 \
+  --create-bucket-configuration LocationConstraint=eu-west-1
+aws s3api put-bucket-versioning --bucket "$BUCKET" \
+  --versioning-configuration Status=Enabled
+aws s3api put-bucket-encryption --bucket "$BUCKET" \
+  --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+aws s3api put-public-access-block --bucket "$BUCKET" \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+Then point `terraform.tf`'s `backend "s3" {}` block at that bucket name (backend blocks can't use variables — it has to be a literal value) and run `terraform init` (or `-migrate-state` if you already have local state), followed by `terraform workspace new staging` and `terraform workspace new prod`.
+
+**2. The CI/CD IAM role.** This repo provisions its own deploy role (OIDC-federated, assumed by GitHub Actions — see `oidc.tf`). That role can't create itself: GitHub can't assume a role that doesn't exist yet. So the **very first** `apply` on a fresh AWS account (the one that creates the OIDC provider, the deploy role, and everything else) has to be run locally, with your own AWS credentials — not through CI. Once that first apply succeeds, all subsequent deploys (staging or prod) can go through GitHub Actions using that role. If you ever destroy and recreate the deploy role itself, you're back to a local bootstrap for that one step.
 
 ## Testing the endpoint
 
@@ -92,4 +111,3 @@ The OIDC trust (GitHub → AWS, no stored long-lived keys) and the deploy role's
 
 - The GitHub Actions workflow itself isn't wired up yet — the OIDC trust/deploy role are ready, but deploys are still manual for now.
 - No `requirements.txt` / dependency scanning set up yet — the Lambda currently has no third-party dependencies beyond `boto3` (provided by the runtime).
-

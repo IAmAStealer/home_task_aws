@@ -1,0 +1,70 @@
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # activate manual button for prod
+
+permissions:
+  id-token: write
+
+jobs:
+  security-checks:
+    name: security-checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+      - name: Initialize terraform
+        run: terraform init -backend=false # avoid connecting, only load terraform for checks
+      - name: Validate terraform
+        run: terraform validate
+      - name: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+      - name: Lambda dependency scan
+        run: |
+          pip install pip-audit
+          pip-audit -r lambda/requirements.txt
+
+  deploy-staging:
+    name: deploy-staging
+    runs-on: ubuntu-latest
+    needs: security-checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: ${{ vars.STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.STAGING_REGION }}
+      - name: Initialize terraform
+        run: terraform init
+      - name: Select terraform staging state
+        run: terraform workspace select staging 
+      - name: Plan terraform to log in the pipeline
+        run: terraform plan -var-file=staging.tfvars -input=false
+      - name: Apply terraform to log in the pipeline
+        run: terraform apply -var-file=staging.tfvars -auto-approve -input=false
+
+  deploy-prod:
+    name: deploy-prod
+    needs: security-checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: ${{ vars.PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.PROD_REGION }}
+      - name: Initialize terraform
+        run: terraform init
+      - name: Select terraform prod state
+        run: terraform workspace select prod 
+      - name: Plan terraform to log in the pipeline
+        run: terraform plan -var-file=prod.tfvars -input=false
+      - name: Apply terraform to log in the pipeline
+        run: terraform apply -var-file=prod.tfvars -auto-approve -input=false
