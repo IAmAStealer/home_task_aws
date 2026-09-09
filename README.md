@@ -92,7 +92,13 @@ The `Content-Type: application/json` header is required — without it, API Gate
 
 ## CI/CD
 
-The OIDC trust (GitHub → AWS, no stored long-lived keys) and the deploy role's permissions are in place (`oidc.tf`), but the GitHub Actions workflow itself isn't wired up yet — that's my next step. Once done: `terraform fmt -check`/`validate` and a security/IaC scan on every push, `plan` on pull requests, automatic `apply` on staging on merge to `main`, manual approval gate before `apply` on prod. See the Bootstrap section above for why the very first apply still has to be run locally.
+GitHub Actions (`.github/workflows/main.yml`), authenticated to AWS via OIDC (no stored long-lived keys, see `oidc.tf`) with a separate least-privilege deploy role per environment:
+
+- **`security-checks`** (every push to `main`): `terraform validate`, `tfsec` (IaC security scan), `pip-audit` on the Lambda's dependencies. Gates both deploy jobs below.
+- **`deploy-staging`**: runs automatically on push to `main`, selects the `staging` workspace, `plan` then `apply`.
+- **`deploy-prod`**: manual only, triggered via `workflow_dispatch` (the "Run workflow" button in the Actions tab) — this is the manual approval gate for prod.
+
+See the Bootstrap section above for why the very first apply still has to be run locally, and for the one-time setup of the `STAGING_DEPLOY_ROLE_ARN`/`STAGING_REGION` (and prod equivalents) repository variables that the workflow reads.
 
 ## Design choices / assumptions
 
@@ -113,8 +119,10 @@ The OIDC trust (GitHub → AWS, no stored long-lived keys) and the deploy role's
 
 The `security-checks` CI job runs tfsec, and it flags a few things that are known, considered, and deliberately deferred rather than silently ignored:
 
-- **`logs:CreateLogStream`/`PutLogEvents` on a wildcarded resource** (`iam.tf`) — CloudWatch Logs stream names are generated dynamically by AWS and can't be enumerated in advance, so a trailing `:*` on the log group ARN is the standard way to scope this permission. For reference, AWS's own `AWSLambdaBasicExecutionRole` managed policy uses a full `Resource: "*"` for these same actions across every log group in the account — this project's version, scoped to one specific log group, is already stricter than that default. Not yet suppressed with a `#tfsec:ignore` (missing the exact rule ID at the time of writing) but the reasoning stands.
+- **`logs:CreateLogStream`/`PutLogEvents` on a wildcarded resource** (`iam.tf`) — CloudWatch Logs stream names are generated dynamically by AWS and can't be enumerated in advance, so a trailing `:*` on the log group ARN is the standard way to scope this permission. For reference, AWS's own `AWSLambdaBasicExecutionRole` managed policy uses a full `Resource: "*"` for these same actions across every log group in the account — this project's version, scoped to one specific log group, is already stricter than that default. Suppressed with `#tfsec:ignore:aws-iam-no-policy-wildcards`.
+- **`kms:ListAliases` on `Resource: "*"`** (`iam.tf`, deploy role) — this action has no resource-level scoping in AWS's IAM model at all (there is no resource type to restrict it to), so `"*"` is the only valid value. Suppressed with `#tfsec:ignore:aws-iam-no-policy-wildcards`.
 - **`aws-api-gateway-enable-access-logging`** (`api_gateway.tf`) — API Gateway access logs (who called what, when) aren't set up. Not required by the assignment; would need its own log group + IAM wiring.
 - **`aws-cloudwatch-log-group-customer-key`** (`cloudwatch.tf`) — the Lambda's log group isn't encrypted with the project's KMS CMK (see "Not implemented" list above for why — needs a `logs.amazonaws.com` statement added to the key policy first).
 - **`aws-lambda-enable-tracing`** (`lambda.tf`) — AWS X-Ray tracing isn't enabled. Not required by the assignment; would add its own IAM permissions and a small runtime overhead.
-- **DynamoDB Point-in-time recovery** — the one finding actually worth fixing rather than deferring (cheap, one block); being added next in `dynamodb.tf` along with the corresponding `dynamodb:UpdateContinuousBackups`/`DescribeContinuousBackups` permissions on the deploy role.
+
+DynamoDB Point-in-time recovery was flagged by the same scan and, unlike the above, was worth fixing rather than deferring (cheap, one block) — it's enabled in `dynamodb.tf`.
