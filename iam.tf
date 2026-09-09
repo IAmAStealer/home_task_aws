@@ -59,3 +59,160 @@ resource "aws_iam_role_policy" "iam_role_policy_lambda_requests" {
     ]
   })
 }
+
+resource "aws_iam_role" "iam_role_github_action" {
+  name        = "${var.environment}-iam-role-github-action"
+  description = "IAM role for github action"
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Principal" : {
+          "Federated" : "${aws_iam_openid_connect_provider.aws_iam_oidc_github_action.arn}"
+        },
+        "Action" : "sts:AssumeRoleWithWebIdentity",
+        "Condition" : {
+          "StringEquals" : {
+            "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com",
+            "token.actions.githubusercontent.com:sub" : "repo:IAmAStealer/home_task_aws:ref:refs/heads/main"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    environment   = var.environment
+    application   = "lambda-requests"
+    oidc-provider = "Github"
+  }
+}
+
+resource "aws_iam_role_policy" "iam_role_policy_github_action" {
+  name = "${var.environment}-iam-role-policy-lambda-requests"
+  role = aws_iam_role.iam_role_github_action.id
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "kms:DescribeKey",
+          "kms:GetKeyPolicy",
+          "kms:PutKeyPolicy",
+          "kms:CreateKey",
+          "kms:CreateAlias",
+          "kms:DeleteAlias",
+          "kms:UpdateAlias",
+          "kms:UpdateKeyDescription",
+          "kms:EnableKeyRotation",
+          "kms:DisableKeyRotation",
+          "kms:ScheduleKeyDeletion",
+          "kms:CancelKeyDeletion",
+          "kms:TagResource",
+          "kms:UntagResource"
+        ]
+        Effect   = "Allow"
+        Resource = aws_kms_key.dynamodb_key.arn
+      },
+      {
+        Action = [
+          "dynamodb:DescribeTable",
+          "dynamodb:ListTagsOfResource",
+          "dynamodb:CreateTable",
+          "dynamodb:DeleteTable",
+          "dynamodb:UpdateTable",
+          "dynamodb:TagResource",
+          "dynamodb:UntagResource",
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.dynamodb.arn
+      },
+      {
+        Action = [
+          "lambda:CreateFunction",
+          "lambda:GetFunction",
+          "lambda:DeleteFunction",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:GetPolicy",
+          "lambda:UpdateFunctionCode",
+          "lambda:AddPermission",
+          "lambda:RemovePermission",
+          "lambda:TagResource",
+          "lambda:UntagResource",
+        ]
+        Effect   = "Allow"
+        Resource = aws_lambda_function.lambda_requests.arn
+      },
+      {
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:CreateLogGroup",
+          "logs:DeleteLogGroup",
+          "logs:PutRetentionPolicy",
+          "logs:TagLogGroup",
+          "logs:UntagLogGroup",
+        ]
+        Effect   = "Allow"
+        Resource = "${aws_cloudwatch_log_group.cloudwatch_lambda_requests.arn}:*"
+      },
+      {
+        Action = [
+          "apigateway:POST",
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:apigateway:${var.region}::/apis"
+      },
+      {
+        Action = [
+          "apigateway:GET",
+          "apigateway:PUT",
+          "apigateway:PATCH",
+          "apigateway:DELETE",
+        ]
+        Effect = "Allow"
+        Resource = [
+          aws_apigatewayv2_api.api_gateway_lambda.arn,
+          "${aws_apigatewayv2_api.api_gateway_lambda.arn}/*"
+        ]
+      },
+      {
+        Action = [
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:PassRole",
+          "iam:UpdateRole",
+          "iam:DeleteRolePolicy",
+          "iam:PutRolePolicy",
+          "iam:TagRole",
+          "iam:UntagRole",
+        ]
+        Effect = "Allow"
+        Resource = [
+          aws_iam_role.iam_role_lambda_requests.arn,
+          aws_iam_role.iam_role_github_action.arn
+        ]
+      },
+      {
+        Action = [
+          "iam:GetOpenIDConnectProvider",
+          "iam:CreateOpenIDConnectProvider",
+          "iam:DeleteOpenIDConnectProvider",
+          "iam:AddClientIDToOpenIDConnectProvider",
+          "iam:RemoveClientIDFromOpenIDConnectProvider",
+          "iam:UpdateOpenIDConnectProviderThumbprint",
+          "iam:TagOpenIDConnectProvider",
+          "iam:UntagOpenIDConnectProvider",
+        ]
+        Effect   = "Allow"
+        Resource = aws_iam_openid_connect_provider.aws_iam_oidc_github_action.arn
+      },
+    ]
+  })
+}
