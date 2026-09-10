@@ -92,13 +92,13 @@ The `Content-Type: application/json` header is required — without it, API Gate
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/main.yml`), authenticated to AWS via OIDC (no stored long-lived keys, see `oidc.tf`) with a separate least-privilege deploy role per environment:
+GitHub Actions, authenticated to AWS via OIDC (no stored long-lived keys, see `oidc.tf`) with a separate least-privilege deploy role per environment. The deploy logic lives once in a reusable workflow (`.github/workflows/deploy.yml`, `on: workflow_call`) parameterized by `environment`, and is called twice from `.github/workflows/main.yml` to avoid duplicating the same steps for staging and prod:
 
 - **`security-checks`** (every push to `main`): `terraform validate`, `tfsec` (IaC security scan), `pip-audit` on the Lambda's dependencies. Gates both deploy jobs below.
-- **`deploy-staging`**: runs automatically on push to `main`, selects the `staging` workspace, `plan` then `apply`.
-- **`deploy-prod`**: manual only, triggered via `workflow_dispatch` (the "Run workflow" button in the Actions tab) — this is the manual approval gate for prod.
+- **`deploy-staging`**: runs automatically on push to `main`, calls `deploy.yml` with `environment: staging`.
+- **`deploy-prod`**: `needs: [security-checks, deploy-staging]` — only queued after staging has succeeded, then calls `deploy.yml` with `environment: prod`. This job targets the GitHub **`prod` environment**, which has required reviewers configured — the run pauses there until someone approves it in the Actions tab. This is the manual approval gate for prod (no `workflow_dispatch` needed anymore).
 
-See the Bootstrap section above for why the very first apply still has to be run locally, and for the one-time setup of the `STAGING_DEPLOY_ROLE_ARN`/`STAGING_REGION` (and prod equivalents) repository variables that the workflow reads.
+Both `staging` and `prod` are set up as GitHub **Environments** (Settings → Environments), each holding its own `DEPLOY_ROLE_ARN`/`REGION` environment variables (same variable names, scoped per environment, resolved automatically by whichever job declares `environment: <name>`) — only `prod` has required reviewers enabled. See the Bootstrap section above for why the very first `apply` still has to be run locally.
 
 ## Design choices / assumptions
 
@@ -110,7 +110,8 @@ See the Bootstrap section above for why the very first apply still has to be run
 - **Logging vs. storage**: every request (valid or not) is logged to CloudWatch (`INFO` for valid, `WARN` for rejected) for audit/security visibility, but only successfully validated requests are written to DynamoDB — CloudWatch is the security/audit trail, DynamoDB is the functional data store. Some of those logged-but-rejected events may be worth forwarding to a security team's observability / threat detection tooling later on.
 - **Stage**: uses the reserved `$default` stage name (no `/{stage}` segment in the URL) with `auto_deploy = true`, since staging and prod are already fully separate deployments (separate `terraform apply -var-file`, separate API Gateway resources).
 - **Routes**: `GET /health` and `POST /health` are declared via a `for_each` over a small map, rather than duplicated resource blocks — the same pattern is used for the two `aws_lambda_permission` statements (one per method, least privilege on `source_arn`).
-- **Not implemented (see `TODO.md` for details and rationale)**: DynamoDB TTL, KMS encryption of CloudWatch logs, Lambda in its own VPC, structured (field-level) logging. These were deliberately deprioritized to prioritize a complete, working, and testable core chain (KMS → DynamoDB → IAM → Lambda → API Gateway) over partially-implemented bonus items.
+- **Terraform module**: the whole application stack (API Gateway, Lambda, DynamoDB, KMS, CloudWatch, and the Lambda's own IAM role) is factored into `modules/health-api/`, instantiated once from the root `main.tf` (`module "health_api"`). The root module keeps only what's shared/cross-cutting and can't sensibly live inside the app module: the GitHub Actions OIDC provider and deploy role (`oidc.tf`, `iam.tf`), which need the module's resource ARNs as outputs (see `modules/health-api/outputs.tf`) but aren't themselves part of the "health API" being shipped.
+- **Not implemented (see `TODO.md` for details and rationale)**: DynamoDB TTL, KMS encryption of CloudWatch logs, Lambda in its own VPC, structured (field-level) logging, API Gateway-level request validation (the `payload` check is done in the Lambda, not via a JSON Schema model on the route), API key authentication. These were deliberately deprioritized to prioritize a complete, working, and testable core chain (KMS → DynamoDB → IAM → Lambda → API Gateway) over partially-implemented bonus items.
 - **FinOps**: `region` is a per-environment variable (staging currently uses a cheaper region), and every resource carries `environment`/`application` tags for cost tracking. Basic, but a base to build on.
 
 ## Known limitations
@@ -119,10 +120,10 @@ See the Bootstrap section above for why the very first apply still has to be run
 
 The `security-checks` CI job runs tfsec, and it flags a few things that are known, considered, and deliberately deferred rather than silently ignored:
 
-- **`logs:CreateLogStream`/`PutLogEvents` on a wildcarded resource** (`iam.tf`) — CloudWatch Logs stream names are generated dynamically by AWS and can't be enumerated in advance, so a trailing `:*` on the log group ARN is the standard way to scope this permission. For reference, AWS's own `AWSLambdaBasicExecutionRole` managed policy uses a full `Resource: "*"` for these same actions across every log group in the account — this project's version, scoped to one specific log group, is already stricter than that default. Suppressed with `#tfsec:ignore:aws-iam-no-policy-wildcards`.
-- **`kms:ListAliases` on `Resource: "*"`** (`iam.tf`, deploy role) — this action has no resource-level scoping in AWS's IAM model at all (there is no resource type to restrict it to), so `"*"` is the only valid value. Suppressed with `#tfsec:ignore:aws-iam-no-policy-wildcards`.
-- **`aws-api-gateway-enable-access-logging`** (`api_gateway.tf`) — API Gateway access logs (who called what, when) aren't set up. Not required by the assignment; would need its own log group + IAM wiring.
-- **`aws-cloudwatch-log-group-customer-key`** (`cloudwatch.tf`) — the Lambda's log group isn't encrypted with the project's KMS CMK (see "Not implemented" list above for why — needs a `logs.amazonaws.com` statement added to the key policy first).
-- **`aws-lambda-enable-tracing`** (`lambda.tf`) — AWS X-Ray tracing isn't enabled. Not required by the assignment; would add its own IAM permissions and a small runtime overhead.
+- **`logs:CreateLogStream`/`PutLogEvents` on a wildcarded resource** (`modules/health-api/iam.tf`) — CloudWatch Logs stream names are generated dynamically by AWS and can't be enumerated in advance, so a trailing `:*` on the log group ARN is the standard way to scope this permission. For reference, AWS's own `AWSLambdaBasicExecutionRole` managed policy uses a full `Resource: "*"` for these same actions across every log group in the account — this project's version, scoped to one specific log group, is already stricter than that default. Suppressed with `#tfsec:ignore:aws-iam-no-policy-wildcards`.
+- **`kms:ListAliases` on `Resource: "*"`** (root `iam.tf`, deploy role) — this action has no resource-level scoping in AWS's IAM model at all (there is no resource type to restrict it to), so `"*"` is the only valid value. Suppressed with `#tfsec:ignore:aws-iam-no-policy-wildcards`.
+- **`aws-api-gateway-enable-access-logging`** (`modules/health-api/api_gateway.tf`) — API Gateway access logs (who called what, when) aren't set up. Not required by the assignment; would need its own log group + IAM wiring.
+- **`aws-cloudwatch-log-group-customer-key`** (`modules/health-api/cloudwatch.tf`) — the Lambda's log group isn't encrypted with the project's KMS CMK (see "Not implemented" list above for why — needs a `logs.amazonaws.com` statement added to the key policy first).
+- **`aws-lambda-enable-tracing`** (`modules/health-api/lambda.tf`) — AWS X-Ray tracing isn't enabled. Not required by the assignment; would add its own IAM permissions and a small runtime overhead.
 
-DynamoDB Point-in-time recovery was flagged by the same scan and, unlike the above, was worth fixing rather than deferring (cheap, one block) — it's enabled in `dynamodb.tf`.
+DynamoDB Point-in-time recovery was flagged by the same scan and, unlike the above, was worth fixing rather than deferring (cheap, one block) — it's enabled in `modules/health-api/dynamodb.tf`.
