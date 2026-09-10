@@ -1,0 +1,37 @@
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Terraform workspace / tfvars file / GitHub environment name (staging or prod)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+
+jobs:
+  terraform:
+    name: terraform-${{ inputs.environment }}
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.2"
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.REGION }}
+      - name: Initialize terraform
+        run: terraform init
+      - name: Select terraform ${{ inputs.environment }} state
+        run: terraform workspace select ${{ inputs.environment }}
+      - name: Plan terraform to log in the pipeline
+        run: terraform plan -var-file=${{ inputs.environment }}.tfvars -input=false
+      - name: Apply terraform to log in the pipeline
+        run: terraform apply -var-file=${{ inputs.environment }}.tfvars -auto-approve -input=false
