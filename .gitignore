@@ -3,7 +3,7 @@
 
 # Python bytecode cache / Lambda build artifact
 __pycache__/
-lambda/function.zip
+**/function.zip
 
 # .tfstate files
 *.tfstate
