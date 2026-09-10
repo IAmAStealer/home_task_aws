@@ -36,3 +36,13 @@ variable "system_log_level" {
     error_message = "system_log_level must be DEBUG, INFO, WARN."
   }
 }
+
+variable "github_repo_condition" {
+  type        = string
+  description = "OIDC subject condition restricting which GitHub repo/branch can assume the deploy role"
+}
+
+variable "state_bucket" {
+  type        = string
+  description = "name of the S3 bucket holding the Terraform state (must match terraform.tf's backend block, which can't use a variable itself)"
+}

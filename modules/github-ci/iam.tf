@@ -19,7 +19,7 @@ resource "aws_iam_role" "iam_role_github_action" {
         "Condition" : {
           "StringEquals" : {
             "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com",
-            "token.actions.githubusercontent.com:sub" : "repo:IAmAStealer@24506305/home_task_aws@1360249375:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" : var.github_repo_condition
           }
         }
       }
@@ -63,7 +63,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "kms:ListResourceTags"
         ]
         Effect   = "Allow"
-        Resource = module.health_api.kms_key_arn
+        Resource = var.kms_key_arn
       },
       {
         Action = [
@@ -86,7 +86,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "dynamodb:DescribeTimeToLive",
         ]
         Effect   = "Allow"
-        Resource = module.health_api.dynamodb_table_arn
+        Resource = var.dynamodb_table_arn
       },
       {
         Action = [
@@ -106,7 +106,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "lambda:UntagResource",
         ]
         Effect   = "Allow"
-        Resource = module.health_api.lambda_function_arn
+        Resource = var.lambda_function_arn
       },
       {
         Action = [
@@ -118,7 +118,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "logs:ListTagsForResource",
         ]
         Effect   = "Allow"
-        Resource = module.health_api.cloudwatch_log_group_arn
+        Resource = var.cloudwatch_log_group_arn
       },
       {
         Action = [
@@ -143,8 +143,8 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
         ]
         Effect = "Allow"
         Resource = [
-          module.health_api.api_gateway_arn,
-          "${module.health_api.api_gateway_arn}/*"
+          var.api_gateway_arn,
+          "${var.api_gateway_arn}/*"
         ]
       },
       {
@@ -164,7 +164,7 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
         ]
         Effect = "Allow"
         Resource = [
-          module.health_api.lambda_role_arn,
+          var.lambda_role_arn,
           aws_iam_role.iam_role_github_action.arn
         ]
       },
@@ -188,14 +188,14 @@ resource "aws_iam_role_policy" "iam_role_policy_github_action" {
           "s3:PutObject",
         ]
         Effect   = "Allow"
-        Resource = "arn:aws:s3:::3a43faa4-955a-4c3d-9579-af96f65a9932/env:/${var.environment}/terraform.tfstate"
+        Resource = "arn:aws:s3:::${var.state_bucket}/env:/${var.environment}/terraform.tfstate"
       },
       {
         Action = [
           "s3:ListBucket",
         ]
         Effect   = "Allow"
-        Resource = "arn:aws:s3:::3a43faa4-955a-4c3d-9579-af96f65a9932"
+        Resource = "arn:aws:s3:::${var.state_bucket}"
       },
     ]
   })
